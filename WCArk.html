@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WCA 世界 / 洲际 / 国家排名计算器</title>
+
+  <!-- JSZip -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <!-- GSAP -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f7f3ea;
+      --card: rgba(255, 252, 245, 0.94);
+      --text: #243044;
+      --muted: #697386;
+      --primary: #2f6fed;
+      --primary-dark: #2457bd;
+      --accent: #ffb84d;
+      --accent-2: #28b7a8;
+      --ink: #222b3a;
+      --border: #d9cbb3;
+      --success: #138a4a;
+      --danger: #c93b35;
+      --warning: #b7791f;
+      --shadow: 0 18px 42px rgba(44, 37, 25, 0.13);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 28px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 12% 12%, rgba(255, 184, 77, 0.25), transparent 28%),
+        radial-gradient(circle at 88% 18%, rgba(40, 183, 168, 0.2), transparent 28%),
+        linear-gradient(135deg, #f9f3e5 0%, #eef6f4 48%, #f8fafc 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.42;
+      background-image:
+        linear-gradient(rgba(36, 48, 68, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(36, 48, 68, 0.035) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, #000, transparent 82%);
+    }
+
+    .sketch-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .sketch-bg svg {
+      position: absolute;
+      width: min(44vw, 520px);
+      opacity: 0.72;
+      filter: drop-shadow(0 18px 18px rgba(34, 43, 58, 0.08));
+    }
+
+    .sketch-cube {
+      right: -70px;
+      top: 24px;
+      animation: floatCube 7s ease-in-out infinite;
+    }
+
+    .sketch-pencil {
+      left: -60px;
+      bottom: 6vh;
+      width: min(34vw, 360px) !important;
+      animation: floatPencil 8s ease-in-out infinite;
+    }
+
+    @keyframes floatCube {
+      0%, 100% { transform: translate3d(0, 0, 0) rotate(-4deg); }
+      50% { transform: translate3d(-12px, 18px, 0) rotate(3deg); }
+    }
+
+    @keyframes floatPencil {
+      0%, 100% { transform: translate3d(0, 0, 0) rotate(5deg); }
+      50% { transform: translate3d(18px, -12px, 0) rotate(-2deg); }
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .hero {
+      position: relative;
+      padding: 34px 0 22px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: 6px;
+      width: min(390px, 72vw);
+      height: 14px;
+      background: url("data:image/svg+xml,%3Csvg width='370' height='16' viewBox='0 0 370 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 11 C55 3, 109 15, 163 7 S273 4, 365 9' fill='none' stroke='%23ffb84d' stroke-width='5' stroke-linecap='round' opacity='.75'/%3E%3Cpath d='M9 13 C71 8, 119 13, 184 10 S283 8, 360 12' fill='none' stroke='%2328b7a8' stroke-width='2' stroke-linecap='round' opacity='.65'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 54px);
+      line-height: 1.08;
+      color: var(--ink);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 21px;
+      line-height: 1.2;
+      color: var(--ink);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0;
+      max-width: 860px;
+      line-height: 1.75;
+      font-size: 16px;
+    }
+
+    .card {
+      position: relative;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      transform: translateY(12px);
+      opacity: 0;
+      animation: riseIn 0.6s ease forwards;
+    }
+
+    .card:nth-of-type(2) { animation-delay: 0.08s; }
+    .card:nth-of-type(3) { animation-delay: 0.16s; }
+    .card:nth-of-type(4) { animation-delay: 0.22s; }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border: 1px dashed rgba(34, 43, 58, 0.16);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    @keyframes riseIn {
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    label,
+    .label-like {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+      margin-bottom: 8px;
+      color: #263248;
+    }
+
+    .title-icon,
+    .btn-icon,
+    .label-icon {
+      display: inline-flex;
+      width: 20px;
+      height: 20px;
+      flex: 0 0 20px;
+      color: currentColor;
+    }
+
+    .title-icon svg,
+    .btn-icon svg,
+    .label-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    input,
+    select,
+    button {
+      width: 100%;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+
+    input,
+    select {
+      border: 2px solid #d9cbb3;
+      padding: 12px 14px;
+      outline: none;
+      background: #fffdf8;
+      color: var(--text);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    }
+
+    input:hover,
+    select:hover {
+      border-color: #c9b58e;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(47, 111, 237, 0.16);
+      transform: translateY(-1px);
+    }
+
+    input[type="file"] { cursor: pointer; }
+
+    button {
+      border: 0;
+      padding: 13px 16px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      box-shadow: 0 8px 0 #1d4f9e;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 0 #173f80;
+    }
+
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 4px 0 #173f80;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .secondary-btn {
+      background: #6b7280 !important;
+      box-shadow: 0 8px 0 #4b5563;
+    }
+
+    .secondary-btn:hover {
+      background: #596170 !important;
+      box-shadow: 0 10px 0 #3f4652;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 7px;
+      line-height: 1.55;
+    }
+
+    .status {
+      padding: 13px 15px;
+      border-radius: 8px;
+      background: #eef5ff;
+      color: #1d4f9e;
+      margin-top: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      border: 1px solid rgba(47, 111, 237, 0.22);
+      animation: softPop 0.28s ease;
+    }
+
+    .status.success {
+      background: #edfdf4;
+      color: #126c3e;
+      border-color: rgba(19, 138, 74, 0.24);
+    }
+
+    .status.error {
+      background: #fff0ef;
+      color: #a92b25;
+      border-color: rgba(201, 59, 53, 0.24);
+    }
+
+    .status.warn {
+      background: #fff8e7;
+      color: #9b6415;
+      border-color: rgba(183, 121, 31, 0.25);
+    }
+
+    @keyframes softPop {
+      from { transform: scale(0.985); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .result {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      position: relative;
+      overflow: hidden;
+      background: #fffdf8;
+      border: 2px solid #d9cbb3;
+      border-radius: 10px;
+      padding: 17px;
+      min-height: 128px;
+      animation: metricIn 0.42s ease both;
+    }
+
+    .metric:nth-child(2) { animation-delay: 0.05s; }
+    .metric:nth-child(3) { animation-delay: 0.1s; }
+    .metric:nth-child(4) { animation-delay: 0.15s; }
+    .metric:nth-child(5) { animation-delay: 0.2s; }
+    .metric:nth-child(6) { animation-delay: 0.25s; }
+
+    .metric::after {
+      content: "";
+      position: absolute;
+      width: 92px;
+      height: 92px;
+      right: -34px;
+      bottom: -44px;
+      border: 12px solid rgba(255, 184, 77, 0.22);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    @keyframes metricIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px) rotate(-1deg);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) rotate(0);
+      }
+    }
+
+    .metric .name {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .metric .value {
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 900;
+      color: var(--ink);
+      word-break: break-word;
+      letter-spacing: 0.2px;
+    }
+
+    .trend {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      min-height: 18px;
+      line-height: 1.3;
+    }
+
+    .trend.up { color: var(--success); }
+    .trend.down { color: var(--danger); }
+    .trend.neutral { color: var(--muted); }
+
+    .small {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    code {
+      background: rgba(47, 111, 237, 0.09);
+      color: #1f4c9f;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 650;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 24px;
+      padding-bottom: 12px;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .row-actions button {
+      width: auto;
+      min-width: 160px;
+    }
+
+    .divider {
+      height: 12px;
+      margin: 18px 0;
+      background: url("data:image/svg+xml,%3Csvg width='280' height='12' viewBox='0 0 280 12' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 7 C28 3, 53 10, 79 6 S132 4, 158 7 S214 9, 278 5' fill='none' stroke='%23d9cbb3' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") left center / 280px 12px repeat-x;
+    }
+
+    .hidden { display: none; }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    ul.small {
+      padding-left: 20px;
+      margin: 0;
+    }
+
+    li { margin: 7px 0; }
+
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 960px) {
+      .result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 16px; }
+      .grid { grid-template-columns: 1fr; }
+      .card { padding: 19px; }
+      .row-actions button {
+        width: 100%;
+        min-width: 0;
+      }
+      .sketch-cube {
+        right: -120px;
+        top: 24px;
+      }
+      .sketch-pencil { display: none; }
+    }
+
+    @media (max-width: 520px) {
+      .result { grid-template-columns: 1fr; }
+      h2 { font-size: 19px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="sketch-bg" aria-hidden="true">
+    <svg class="sketch-cube" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M122 76 278 38 356 124 318 292 158 352 56 224Z" fill="#fffaf0" stroke="#222b3a" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M122 76 202 158 356 124" stroke="#222b3a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M202 158 158 352" stroke="#222b3a" stroke-width="5" stroke-linecap="round"/>
+      <path d="M84 151 202 158 318 86" stroke="#222b3a" stroke-width="3" opacity=".45" stroke-linecap="round"/>
+      <path d="M63 224 202 158 318 292" stroke="#222b3a" stroke-width="3" opacity=".45" stroke-linecap="round"/>
+      <path d="M126 78 94 146 64 223" stroke="#ffb84d" stroke-width="12" stroke-linecap="round" opacity=".82"/>
+      <path d="M205 159 286 139 356 124" stroke="#28b7a8" stroke-width="12" stroke-linecap="round" opacity=".78"/>
+      <path d="M162 350 235 322 318 292" stroke="#2f6fed" stroke-width="12" stroke-linecap="round" opacity=".72"/>
+      <path d="M79 242 C114 286, 138 313, 157 348" stroke="#222b3a" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+      <path d="M91 69 C120 43, 172 31, 218 29" stroke="#222b3a" stroke-width="4" stroke-linecap="round" opacity=".22"/>
+    </svg>
+
+    <svg class="sketch-pencil" viewBox="0 0 360 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M44 212 C91 165, 142 116, 257 34" stroke="#222b3a" stroke-width="22" stroke-linecap="round"/>
+      <path d="M48 213 C96 168, 151 119, 260 36" stroke="#ffdf8a" stroke-width="15" stroke-linecap="round"/>
+      <path d="M255 34 304 25 282 72Z" fill="#fffaf0" stroke="#222b3a" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M286 32 304 25 297 43Z" fill="#222b3a"/>
+      <path d="M33 223 48 213" stroke="#c93b35" stroke-width="26" stroke-linecap="round"/>
+      <path d="M66 231 C107 250, 164 254, 225 233" stroke="#28b7a8" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+      <path d="M54 253 C101 278, 172 285, 269 248" stroke="#2f6fed" stroke-width="4" stroke-linecap="round" opacity=".35"/>
+    </svg>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <h1>WCA 世界 / 洲际 / 国家排名计算器</h1>
+      <p class="subtitle">
+        选择官方项目，输入单次或平均成绩，计算世界排名、洲际排名、国家排名，以及对应的击败百分比。
+        支持手绘风界面、SVG 图标和 GSAP 数字动画。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span class="label-like">
+          <span class="label-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16"/>
+            </svg>
+          </span>
+          1. 加载 WCA 官方数据
+        </span>
+      </h2>
+
+      <p class="small">
+        请先下载 WCA 官方导出的 <code>WCA_export_*.tsv.zip</code> 文件：
+        <a href="https://www.worldcubeassociation.org/export/results" target="_blank" rel="noreferrer">
+          https://www.worldcubeassociation.org/export/results
+        </a>
+      </p>
+
+      <input id="zipFile" type="file" accept=".zip" />
+
+      <div id="loadStatus" class="status warn">
+        尚未加载数据。请选择 WCA 官方 TSV ZIP 文件。
+      </div>
+
+      <div class="note">
+        注：如果你的 TSV 只有 <code>bestperson_id / event_id / world_rank / continent_rank / country_rank</code>，
+        但没有 <code>best</code>，就无法按“输入成绩”反推排名；本页面需要 <code>best</code> 列。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span class="label-like">
+          <span class="label-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 6h14M5 12h14M5 18h10"/>
+            </svg>
+          </span>
+          2. 输入项目与成绩
+        </span>
+      </h2>
+
+      <div class="grid">
+        <div>
+          <label for="eventSelect">
+            <span class="title-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 7h12M6 12h12M6 17h8"/>
+              </svg>
+            </span>
+            WCA 项目
+          </label>
+          <select id="eventSelect"></select>
+          <div class="hint" id="eventHint"></div>
+        </div>
+
+        <div>
+          <label for="modeSelect">
+            <span class="title-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 4v4M17 4v4M5 10h14M7 14h10M7 18h6"/>
+              </svg>
+            </span>
+            成绩类型
+          </label>
+          <select id="modeSelect">
+            <option value="single">单次 Single</option>
+            <option value="average">平均 Average / Mean</option>
+          </select>
+          <div class="hint">部分项目没有官方平均排名，例如三阶多盲。</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div id="normalInputBox">
+        <label for="scoreInput">
+          <span class="title-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19h16M8 16V8m4 8V5m4 11v-6"/>
+            </svg>
+          </span>
+          成绩
+        </label>
+        <input id="scoreInput" placeholder="例如：6.58、1:02.34、22.67" />
+        <div class="hint" id="scoreHint">
+          时间项目可输入 <code>6.58</code>、<code>1:02.34</code>、<code>1:02</code>。
+          FMC 单次输入步数，如 <code>18</code>；FMC 平均输入如 <code>22.67</code>。
+        </div>
+      </div>
+
+      <div id="mbldInputBox" class="hidden">
+        <div class="grid">
+          <div>
+            <label for="mbldSolved">多盲成功还原个数</label>
+            <input id="mbldSolved" type="number" min="0" placeholder="例如：48" />
+          </div>
+          <div>
+            <label for="mbldAttempted">多盲尝试个数</label>
+            <input id="mbldAttempted" type="number" min="0" placeholder="例如：56" />
+          </div>
+          <div>
+            <label for="mbldTime">用时</label>
+            <input id="mbldTime" placeholder="例如：58:06 或 58:06.00" />
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <div class="hint">
+              三阶多盲排名使用 WCA 内部编码，本网页会自动转换。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row-actions">
+        <button id="calcBtn">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>
+              <path d="M8 8h8M8 12h8M8 16h5"/>
+            </svg>
+          </span>
+          计算排名
+        </button>
+        <button id="clearBtn" class="secondary-btn">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12"/>
+            </svg>
+          </span>
+          清空结果
+        </button>
+      </div>
+
+      <div id="calcStatus" class="status hidden"></div>
+
+      <div id="resultBox" class="result hidden">
+        <div class="metric">
+          <div class="name">世界排名</div>
+          <div class="value" id="worldRankValue">-</div>
+          <div class="trend" id="worldRankDelta"></div>
+        </div>
+        <div class="metric">
+          <div class="name">世界击败百分比</div>
+          <div class="value" id="worldPercentValue">-</div>
+          <div class="trend" id="worldPercentDelta"></div>
+        </div>
+        <div class="metric">
+          <div class="name">洲际排名</div>
+          <div class="value" id="continentRankValue">-</div>
+          <div class="trend" id="continentRankDelta"></div>
+        </div>
+        <div class="metric">
+          <div class="name">洲际击败百分比</div>
+          <div class="value" id="continentPercentValue">-</div>
+          <div class="trend" id="continentPercentDelta"></div>
+        </div>
+        <div class="metric">
+          <div class="name">国家排名</div>
+          <div class="value" id="countryRankValue">-</div>
+          <div class="trend" id="countryRankDelta"></div>
+        </div>
+        <div class="metric">
+          <div class="name">国家击败百分比</div>
+          <div class="value" id="countryPercentValue">-</div>
+          <div class="trend" id="countryPercentDelta"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span class="label-like">
+          <span class="label-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v18M3 12h18"/>
+            </svg>
+          </span>
+          说明
+        </span>
+      </h2>
+      <ul class="small">
+        <li>本工具按 WCA 官方导出数据中的排名表计算。</li>
+        <li>排名规则：排名 = 成绩严格优于你的人数 + 1。</li>
+        <li>打败人数 = 成绩严格差于你的人数。与你成绩相同的人不计入打败。</li>
+        <li>平均成绩请只在有官方平均排名的项目中使用。</li>
+        <li>FMC 平均在 WCA 数据中通常以百分之一移动数保存，例如 22.67 moves 会保存为 2267。</li>
+        <li>如果你的 TSV 没有 <code>best</code> 列，请换成带 <code>best</code> 的导出文件，否则无法从输入成绩反推排名。</li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      单文件 HTML，本地浏览器运行，不上传你的成绩或数据文件。
+    </div>
+  </div>
+
+  <script>
+    const EVENTS = [
+      { id: "333", name: "三阶 3x3x3 Cube", type: "time", average: true },
+      { id: "222", name: "二阶 2x2x2 Cube", type: "time", average: true },
+      { id: "444", name: "四阶 4x4x4 Cube", type: "time", average: true },
+      { id: "555", name: "五阶 5x5x5 Cube", type: "time", average: true },
+      { id: "666", name: "六阶 6x6x6 Cube", type: "time", average: true },
+      { id: "777", name: "七阶 7x7x7 Cube", type: "time", average: true },
+      { id: "333bf", name: "三盲 3x3x3 Blindfolded", type: "time", average: true },
+      { id: "333fm", name: "最少步 3x3x3 Fewest Moves", type: "fmc", average: true },
+      { id: "333oh", name: "单手 3x3x3 One-Handed", type: "time", average: true },
+      { id: "clock", name: "魔表 Clock", type: "time", average: true },
+      { id: "minx", name: "五魔方 Megaminx", type: "time", average: true },
+      { id: "pyram", name: "金字塔 Pyraminx", type: "time", average: true },
+      { id: "skewb", name: "斜转 Skewb", type: "time", average: true },
+      { id: "sq1", name: "SQ-1 Square-1", type: "time", average: true },
+      { id: "444bf", name: "四盲 4x4x4 Blindfolded", type: "time", average: true },
+      { id: "555bf", name: "五盲 5x5x5 Blindfolded", type: "time", average: true },
+      { id: "333mbf", name: "三阶多盲 3x3x3 Multi-Blind", type: "mbld", average: false }
+    ];
+
+    const state = {
+      single: new Map(),
+      average: new Map(),
+      loaded: false,
+      fileName: "",
+      lastResult: null
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const eventSelect = $("eventSelect");
+    const modeSelect = $("modeSelect");
+    const scoreInput = $("scoreInput");
+    const loadStatus = $("loadStatus");
+    const calcStatus = $("calcStatus");
+    const resultBox = $("resultBox");
+    const normalInputBox = $("normalInputBox");
+    const mbldInputBox = $("mbldInputBox");
+
+    const metricEls = {
+      worldRank: $("worldRankValue"),
+      worldPercent: $("worldPercentValue"),
+      continentRank: $("continentRankValue"),
+      continentPercent: $("continentPercentValue"),
+      countryRank: $("countryRankValue"),
+      countryPercent: $("countryPercentValue"),
+      worldRankDelta: $("worldRankDelta"),
+      worldPercentDelta: $("worldPercentDelta"),
+      continentRankDelta: $("continentRankDelta"),
+      continentPercentDelta: $("continentPercentDelta"),
+      countryRankDelta: $("countryRankDelta"),
+      countryPercentDelta: $("countryPercentDelta"),
+    };
+
+    function initEvents() {
+      eventSelect.innerHTML = EVENTS.map(e =>
+        `<option value="${e.id}">${e.name}</option>`
+      ).join("");
+      updateEventUI();
+    }
+
+    function getEvent() {
+      return EVENTS.find(e => e.id === eventSelect.value);
+    }
+
+    function setStatus(el, text, type = "") {
+      el.className = "status" + (type ? " " + type : "");
+      el.textContent = text;
+      el.classList.remove("hidden");
+    }
+
+    function hideStatus(el) {
+      el.classList.add("hidden");
+    }
+
+    function updateEventUI() {
+      const ev = getEvent();
+      $("eventHint").textContent = `项目 ID：${ev.id}`;
+
+      if (ev.type === "mbld") {
+        normalInputBox.classList.add("hidden");
+        mbldInputBox.classList.remove("hidden");
+        modeSelect.value = "single";
+        modeSelect.disabled = true;
+      } else {
+        normalInputBox.classList.remove("hidden");
+        mbldInputBox.classList.add("hidden");
+        modeSelect.disabled = false;
+      }
+
+      if (ev.type === "time") {
+        $("scoreHint").innerHTML = '时间项目可输入 <code>6.58</code>、<code>1:02.34</code>、<code>1:02</code>。';
+      } else if (ev.type === "fmc") {
+        $("scoreHint").innerHTML = 'FMC 单次输入整数步数，如 <code>18</code>；FMC 平均输入小数，如 <code>22.67</code>。';
+      }
+    }
+
+    eventSelect.addEventListener("change", updateEventUI);
+
+    $("zipFile").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setStatus(loadStatus, "正在读取 ZIP 文件，请稍候……");
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+
+        const singleFile = Object.values(zip.files).find(f =>
+          /WCA_export_ranks_single\.tsv$/i.test(f.name)
+        );
+        const averageFile = Object.values(zip.files).find(f =>
+          /WCA_export_ranks_average\.tsv$/i.test(f.name)
+        );
+
+        if (!singleFile || !averageFile) {
+          throw new Error("ZIP 中未找到 WCA_export_ranks_single.tsv 或 WCA_export_ranks_average.tsv。");
+        }
+
+        const singleText = await singleFile.async("string");
+        const averageText = await averageFile.async("string");
+
+        state.single = parseRanks(singleText);
+        state.average = parseRanks(averageText);
+        state.loaded = true;
+        state.fileName = file.name;
+
+        setStatus(
+          loadStatus,
+          `数据加载成功：${file.name}\n单次项目数：${state.single.size}\n平均项目数：${state.average.size}`,
+          "success"
+        );
+      } catch (err) {
+        state.loaded = false;
+        setStatus(loadStatus, "加载失败：" + err.message, "error");
+      }
+    });
+
+    function parseRanks(tsv) {
+      const map = new Map();
+      const lines = tsv.trim().split(/\r?\n/);
+      if (lines.length <= 1) return map;
+
+      const header = lines[0].split("\t");
+
+      const eventIdx = header.indexOf("event_id");
+      const bestIdx = header.indexOf("best");
+      const worldRankIdx = findIdx(header, ["world_rank", "worldrank"]);
+      const continentRankIdx = findIdx(header, ["continent_rank", "continentrank"]);
+      const countryRankIdx = findIdx(header, ["country_rank", "countryrank"]);
+
+      if (eventIdx === -1 || bestIdx === -1) {
+        throw new Error("排名 TSV 格式异常：找不到 event_id 或 best 字段。");
+      }
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split("\t");
+        const eventId = cols[eventIdx];
+        const best = Number(cols[bestIdx]);
+
+        if (!eventId || !Number.isFinite(best) || best <= 0) continue;
+
+        const row = {
+          best,
+          world_rank: toNum(cols[worldRankIdx]),
+          continent_rank: toNum(cols[continentRankIdx]),
+          country_rank: toNum(cols[countryRankIdx]),
+        };
+
+        if (!map.has(eventId)) map.set(eventId, { rows: [], values: [], totals: null });
+        map.get(eventId).rows.push(row);
+      }
+
+      for (const [eventId, obj] of map.entries()) {
+        obj.rows.sort((a, b) => a.best - b.best);
+        obj.values = obj.rows.map(r => r.best);
+        obj.totals = {
+          world: getTotal(obj.rows, "world_rank"),
+          continent: getTotal(obj.rows, "continent_rank"),
+          country: getTotal(obj.rows, "country_rank")
+        };
+        map.set(eventId, obj);
+      }
+
+      return map;
+    }
+
+    function findIdx(header, candidates) {
+      for (const c of candidates) {
+        const i = header.indexOf(c);
+        if (i !== -1) return i;
+      }
+      return -1;
+    }
+
+    function toNum(v) {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : NaN;
+    }
+
+    function getTotal(rows, key) {
+      let mx = 0;
+      let found = false;
+      for (const r of rows) {
+        const n = r[key];
+        if (Number.isFinite(n) && n > mx) {
+          mx = n;
+          found = true;
+        }
+      }
+      return found ? mx : rows.length;
+    }
+
+    function countAll(map) {
+      let n = 0;
+      for (const obj of map.values()) n += obj.rows.length;
+      return n;
+    }
+
+    function parseScoreToWcaValue(score, eventType, mode) {
+      score = String(score).trim();
+      if (!score) throw new Error("请输入成绩。");
+
+      if (eventType === "time") {
+        return parseTimeToCentiseconds(score);
+      }
+
+      if (eventType === "fmc") {
+        const num = Number(score);
+        if (!Number.isFinite(num) || num <= 0) {
+          throw new Error("FMC 成绩格式不正确。");
+        }
+
+        if (mode === "single") {
+          if (!Number.isInteger(num)) {
+            throw new Error("FMC 单次请输入整数步数，例如 18。");
+          }
+          return num;
+        } else {
+          return Math.round(num * 100);
+        }
+      }
+
+      throw new Error("未知项目类型。");
+    }
+
+    function parseTimeToCentiseconds(input) {
+      const s = String(input).trim();
+      if (!s) throw new Error("请输入时间成绩。");
+
+      const parts = s.split(":");
+      let totalSeconds = 0;
+
+      if (parts.length === 1) {
+        totalSeconds = Number(parts[0]);
+      } else if (parts.length === 2) {
+        const min = Number(parts[0]);
+        const sec = Number(parts[1]);
+        if (!Number.isFinite(min) || !Number.isFinite(sec)) {
+          throw new Error("时间格式不正确。");
+        }
+        totalSeconds = min * 60 + sec;
+      } else if (parts.length === 3) {
+        const hour = Number(parts[0]);
+        const min = Number(parts[1]);
+        const sec = Number(parts[2]);
+        if (!Number.isFinite(hour) || !Number.isFinite(min) || !Number.isFinite(sec)) {
+          throw new Error("时间格式不正确。");
+        }
+        totalSeconds = hour * 3600 + min * 60 + sec;
+      } else {
+        throw new Error("时间格式不正确。");
+      }
+
+      if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+        throw new Error("时间成绩必须大于 0。");
+      }
+
+      return Math.round(totalSeconds * 100);
+    }
+
+    function parseMbldValue() {
+      const solved = Number($("mbldSolved").value);
+      const attempted = Number($("mbldAttempted").value);
+      const timeInput = $("mbldTime").value.trim();
+
+      if (!Number.isInteger(solved) || !Number.isInteger(attempted)) {
+        throw new Error("多盲成功数和尝试数必须是整数。");
+      }
+
+      if (solved <= 0 || attempted <= 0 || solved > attempted) {
+        throw new Error("多盲数量不正确：需满足 0 < 成功数 ≤ 尝试数。");
+      }
+
+      const missed = attempted - solved;
+      const points = solved - missed;
+
+      if (points <= 0) {
+        throw new Error("多盲成绩必须至少有正分。");
+      }
+
+      const seconds = Math.round(parseTimeToCentiseconds(timeInput) / 100);
+
+      if (seconds <= 0 || seconds > 99999) {
+        throw new Error("多盲用时不正确或过长。");
+      }
+
+      if (points > 99 || missed > 99) {
+        throw new Error("多盲编码超出本工具支持范围。");
+      }
+
+      return Number(
+        "1" +
+        String(99 - points).padStart(2, "0") +
+        String(seconds).padStart(5, "0") +
+        String(missed).padStart(2, "0")
+      );
+    }
+
+    function lowerBound(arr, value) {
+      let l = 0, r = arr.length;
+      while (l < r) {
+        const m = (l + r) >> 1;
+        if (arr[m] < value) l = m + 1;
+        else r = m;
+      }
+      return l;
+    }
+
+    function upperBound(arr, value) {
+      let l = 0, r = arr.length;
+      while (l < r) {
+        const m = (l + r) >> 1;
+        if (arr[m] <= value) l = m + 1;
+        else r = m;
+      }
+      return l;
+    }
+
+    function calculateRankFromRows(eventData, value) {
+      const { rows, values, totals } = eventData;
+      const better = lowerBound(values, value);
+      const equalOrBetter = upperBound(values, value);
+      const total = rows.length;
+
+      const rowIndex = Math.min(Math.max(better, 0), rows.length - 1);
+      const row = rows[rowIndex] || null;
+
+      // 世界排名一定可通过 best 数值计算
+      const worldRank = better + 1;
+      const worldBeaten = total - equalOrBetter;
+      const worldPercent = total > 0 ? (worldBeaten / total) * 100 : 0;
+
+      // 洲际 / 国家：如果 TSV 里有对应 rank 列，优先展示；
+      // 如果没有，就回退为世界排名，避免出现空值。
+      const continentRank = row && Number.isFinite(row.continent_rank) ? row.continent_rank : worldRank;
+      const countryRank = row && Number.isFinite(row.country_rank) ? row.country_rank : worldRank;
+
+      const continentTotal = totals?.continent || total;
+      const countryTotal = totals?.country || total;
+
+      const continentBeaten = Math.max(continentTotal - continentRank, 0);
+      const countryBeaten = Math.max(countryTotal - countryRank, 0);
+
+      const continentPercent = continentTotal > 0 ? (continentBeaten / continentTotal) * 100 : 0;
+      const countryPercent = countryTotal > 0 ? (countryBeaten / countryTotal) * 100 : 0;
+
+      return {
+        world: {
+          rank: worldRank,
+          total,
+          beaten: worldBeaten,
+          beatenPercent: worldPercent
+        },
+        continent: {
+          rank: continentRank,
+          total: continentTotal,
+          beaten: continentBeaten,
+          beatenPercent: continentPercent
+        },
+        country: {
+          rank: countryRank,
+          total: countryTotal,
+          beaten: countryBeaten,
+          beatenPercent: countryPercent
+        }
+      };
+    }
+
+    function formatRank(n) {
+      return "#" + Math.round(n).toLocaleString();
+    }
+
+    function formatPercent(n) {
+      return Number(n).toFixed(2) + "%";
+    }
+
+    function animateTextNumber(el, from, to, formatter) {
+      const obj = { value: Number.isFinite(from) ? from : 0 };
+      gsap.to(obj, {
+        value: to,
+        duration: 0.7,
+        ease: "power2.out",
+        onUpdate: () => {
+          el.textContent = formatter(obj.value);
+        }
+      });
+    }
+
+    function setTrend(el, current, previous, isPercent = false) {
+      if (previous == null) {
+        el.textContent = "";
+        el.className = "trend neutral";
+        return;
+      }
+
+      const delta = current - previous;
+      if (Math.abs(delta) < 1e-9) {
+        el.textContent = "较上次无变化";
+        el.className = "trend neutral";
+        return;
+      }
+
+      const sign = delta > 0 ? "+" : "";
+      const text = isPercent
+        ? `${sign}${delta.toFixed(2)}%`
+        : `${sign}${Math.round(delta)}`;
+
+      el.textContent = `较上次 ${text}`;
+      el.className = "trend " + (delta > 0 ? "up" : "down");
+    }
+
+    function showResultAnimation() {
+      gsap.fromTo(
+        "#resultBox",
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }
+      );
+      gsap.fromTo(
+        ".metric",
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.35, stagger: 0.05, ease: "power2.out" }
+      );
+    }
+
+    $("calcBtn").addEventListener("click", () => {
+      hideStatus(calcStatus);
+      resultBox.classList.add("hidden");
+
+      try {
+        if (!state.loaded) {
+          throw new Error("请先加载 WCA 官方 TSV ZIP 数据。");
+        }
+
+        const ev = getEvent();
+        const mode = modeSelect.value;
+
+        if (mode === "average" && !ev.average) {
+          throw new Error("该项目没有官方平均排名。");
+        }
+
+        let value;
+        if (ev.type === "mbld") {
+          value = parseMbldValue();
+        } else {
+          value = parseScoreToWcaValue(scoreInput.value, ev.type, mode);
+        }
+
+        const rankMap = mode === "single" ? state.single : state.average;
+        const eventData = rankMap.get(ev.id);
+
+        if (!eventData || !eventData.rows || eventData.rows.length === 0) {
+          throw new Error("数据中找不到该项目的排名记录。");
+        }
+
+        const res = calculateRankFromRows(eventData, value);
+        const prev = state.lastResult;
+
+        // 动画填充
+        animateTextNumber(metricEls.worldRank, prev?.world?.rank ?? res.world.rank, res.world.rank, formatRank);
+        animateTextNumber(metricEls.worldPercent, prev?.world?.beatenPercent ?? res.world.beatenPercent, res.world.beatenPercent, formatPercent);
+
+        animateTextNumber(metricEls.continentRank, prev?.continent?.rank ?? res.continent.rank, res.continent.rank, formatRank);
+        animateTextNumber(metricEls.continentPercent, prev?.continent?.beatenPercent ?? res.continent.beatenPercent, res.continent.beatenPercent, formatPercent);
+
+        animateTextNumber(metricEls.countryRank, prev?.country?.rank ?? res.country.rank, res.country.rank, formatRank);
+        animateTextNumber(metricEls.countryPercent, prev?.country?.beatenPercent ?? res.country.beatenPercent, res.country.beatenPercent, formatPercent);
+
+        setTrend(metricEls.worldRankDelta, res.world.rank, prev?.world?.rank, false);
+        setTrend(metricEls.worldPercentDelta, res.world.beatenPercent, prev?.world?.beatenPercent, true);
+
+        setTrend(metricEls.continentRankDelta, res.continent.rank, prev?.continent?.rank, false);
+        setTrend(metricEls.continentPercentDelta, res.continent.beatenPercent, prev?.continent?.beatenPercent, true);
+
+        setTrend(metricEls.countryRankDelta, res.country.rank, prev?.country?.rank, false);
+        setTrend(metricEls.countryPercentDelta, res.country.beatenPercent, prev?.country?.beatenPercent, true);
+
+        state.lastResult = res;
+        resultBox.classList.remove("hidden");
+        showResultAnimation();
+
+        setStatus(
+          calcStatus,
+          `计算成功。\n项目：${ev.name}\n类型：${mode === "single" ? "单次" : "平均"}\nWCA 内部成绩值：${value}`,
+          "success"
+        );
+      } catch (err) {
+        setStatus(calcStatus, err.message, "error");
+      }
+    });
+
+    $("clearBtn").addEventListener("click", () => {
+      scoreInput.value = "";
+      $("mbldSolved").value = "";
+      $("mbldAttempted").value = "";
+      $("mbldTime").value = "";
+      hideStatus(calcStatus);
+      resultBox.classList.add("hidden");
+      state.lastResult = null;
+
+      // 清空趋势显示
+      for (const k of [
+        "worldRankDelta", "worldPercentDelta",
+        "continentRankDelta", "continentPercentDelta",
+        "countryRankDelta", "countryPercentDelta"
+      ]) {
+        metricEls[k].textContent = "";
+        metricEls[k].className = "trend neutral";
+      }
+
+      // 轻微回弹
+      gsap.to(window, { duration: 0.01 }); // 占位，避免某些浏览器下空点击无反馈
+    });
+
+    initEvents();
+  </script>
+</body>
+</html>
